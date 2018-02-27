@@ -1306,6 +1306,20 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--api-host",
 		     opt_set_charp, NULL, &opt_api_host,
 		     "Specify API listen address, default: 0.0.0.0"),
+#ifdef USE_BITMINE_T2
+	OPT_WITH_ARG("--T2pll1",
+		     set_int_1_to_65535, opt_show_intval, &opt_A1Pll1,
+		     "Port number of miner API"),
+	OPT_WITH_ARG("--T2pll2",
+		     set_int_1_to_65535, opt_show_intval, &opt_A1Pll2,
+		     "Port number of miner API"),
+	OPT_WITH_ARG("--T2pll3",
+		     set_int_1_to_65535, opt_show_intval, &opt_A1Pll3,
+		     "Port number of miner API"),
+	OPT_WITH_ARG("--T2pll4",
+		     set_int_1_to_65535, opt_show_intval, &opt_A1Pll4,
+		     "Port number of miner API"),
+#endif
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--au3-freq",
 		     set_float_100_to_250, &opt_show_floatval, &opt_au3_freq,
@@ -4359,6 +4373,15 @@ static void __kill_work(void)
 	thr = &control_thr[usbres_thr_id];
 	kill_timeout(thr);
 #endif
+	forcelog(LOG_INFO, "Power down");
+	int ret = access("/sys/class/gpio/gpio115", F_OK); //power enable
+	if(ret == -1)//file not exist
+	{
+		system("echo 115 > /sys/class/gpio/export");
+		system("echo out > /sys/class/gpio/gpio115/direction");
+	}
+	system("echo 0 > /sys/class/gpio/gpio115/value");
+
 
 }
 
