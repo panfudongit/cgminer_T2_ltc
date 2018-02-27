@@ -982,6 +982,7 @@ struct pool;
 #define API_MCAST_ADDR "224.0.0.75"
 
 extern bool opt_work_update;
+extern bool opt_diff_update;
 extern bool opt_protocol;
 extern bool have_longpoll;
 extern char *opt_kernel_path;

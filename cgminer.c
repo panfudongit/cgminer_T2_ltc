@@ -143,6 +143,8 @@ struct strategies strategies[] = {
 static char packagename[256];
 
 bool opt_work_update;
+bool opt_diff_update;
+
 bool opt_protocol;
 static struct benchfile_layout {
 	int length;
@@ -3660,6 +3662,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s%s",
 			       hashshow, cgpu->drv->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "", worktime);
 			sharelog(disposition, work);
+			if(memcmp(reason, "unknown-work", 12))
+				restart_threads();
 		}
 
 		/* Once we have more than a nominal amount of sequential rejects,
@@ -10299,6 +10303,10 @@ begin_bench:
 		if (opt_work_update)
 			signal_work_update();
 		opt_work_update = false;
+
+		if(opt_diff_update)
+			restart_threads();
+		opt_diff_update = false;
 
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
