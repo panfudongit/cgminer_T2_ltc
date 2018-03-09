@@ -348,6 +348,8 @@ int opt_A1Pll3=120; // -1 Default
 int opt_A1Pll4=120; // -1 Default
 int opt_A1Pll5=120; // -1 Default
 int opt_A1Pll6=120; // -1 Default
+int test_chip_id = 1;
+int test_chips = 1;
 
 
 char *opt_kernel_path;
@@ -1320,6 +1322,13 @@ static struct opt_table opt_config_table[] = {
 		     "Port number of miner API"),
 	OPT_WITH_ARG("--T2pll4",
 		     set_int_1_to_65535, opt_show_intval, &opt_A1Pll4,
+		     "Port number of miner API"),
+
+	OPT_WITH_ARG("--Tchipid",
+		     set_int_1_to_65535, opt_show_intval, &test_chip_id,
+		     "Port number of miner API"),
+	OPT_WITH_ARG("--Tchips",
+		     set_int_1_to_65535, opt_show_intval, &test_chips,
 		     "Port number of miner API"),
 #endif
 #ifdef USE_ICARUS

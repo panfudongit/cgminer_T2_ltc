@@ -198,9 +198,29 @@ static uint8_t *cmd_BIST_FIX_BCAST(struct T2_chain *t2)
 	return ret;
 }
 
+static uint8_t *cmd_BIST_FIX_IDUAL(struct T2_chain *t2, uint8_t chip_id)
+{
+	uint8_t *ret = exec_cmd(t2, T2_BIST_FIX, chip_id, NULL, 0, 0);
+	if (ret == NULL || ret[0] != T2_BIST_FIX) {
+		applog(LOG_ERR, "%d: cmd_BIST_FIX_BCAST failed", t2->chain_id);
+		return NULL;
+	}
+	return ret;
+}
+
 static uint8_t *cmd_BIST_COLLECT_BCAST(struct T2_chain *t2)
 {
 	uint8_t *ret = exec_cmd(t2, T2_BIST_COLLECT, 0x00, NULL, 0, 0);
+	if (ret == NULL || ret[0] != T2_BIST_COLLECT) {
+		applog(LOG_ERR, "%d: cmd_BIST_COLLECT_BCAST failed", t2->chain_id);
+		return NULL;
+	}
+	return ret;
+}
+
+static uint8_t *cmd_BIST_COLLECT_IDUAL(struct T2_chain *t2, uint8_t chip_id)
+{
+	uint8_t *ret = exec_cmd(t2, T2_BIST_COLLECT, chip_id, NULL, 0, 0);
 	if (ret == NULL || ret[0] != T2_BIST_COLLECT) {
 		applog(LOG_ERR, "%d: cmd_BIST_COLLECT_BCAST failed", t2->chain_id);
 		return NULL;
@@ -414,36 +434,39 @@ static bool set_pll_config(struct T2_chain *t2, int idxpll)
 {
 
 	uint8_t temp_reg[REG_LENGTH];
-	int i;
+	int i, j;
 	uint32_t pll_fbdiv, pll_prediv, pll_postdiv, postdiv;
 	uint32_t f_vcc, f_pll;
 
-	for(i = 0; i <= idxpll; i++)
-	{
-		pll_fbdiv = ((((uint32_t)default_reg[i][0]) << 8) & 0x00000100) | (((uint32_t)default_reg[i][1]) & 0x000000ff);
-		pll_prediv = (((uint32_t)default_reg[i][0]) >> 1) & 0x0000001f;
-		pll_postdiv = (((uint32_t)default_reg[i][3]) >> 6) & 0x00000003;
-		postdiv = (1 << pll_postdiv);
-
-		f_vcc = 12 * pll_fbdiv / pll_prediv;
-		f_pll = f_vcc / postdiv;
-
-		memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
-		applog(LOG_DEBUG,
-	       "{ 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, },//PLL=%dMHz, VCO=%dMHz",
-	       temp_reg[0], temp_reg[1], temp_reg[2],
-	       temp_reg[3], temp_reg[4], temp_reg[5],
-	       temp_reg[6], temp_reg[7], temp_reg[8],
-	       temp_reg[9], temp_reg[10], temp_reg[11], f_pll, f_vcc);
-	    if (!cmd_WRITE_REG(t2, ADDR_BROADCAST, temp_reg))
+		for(i = 0; i <= idxpll; i++)
 		{
-			applog(LOG_ERR, "set PLL %d MHz fail vco %d MHz", f_pll, f_vcc);
-			return false;
-		}
-		applog(LOG_WARNING, "set PLL %d MHz success vco %d MHz", f_pll, f_vcc);
+			pll_fbdiv = ((((uint32_t)default_reg[i][0]) << 8) & 0x00000100) | (((uint32_t)default_reg[i][1]) & 0x000000ff);
+			pll_prediv = (((uint32_t)default_reg[i][0]) >> 1) & 0x0000001f;
+			pll_postdiv = (((uint32_t)default_reg[i][3]) >> 6) & 0x00000003;
+			postdiv = (1 << pll_postdiv);
 
-		cgsleep_us(200000);
-	}
+			f_vcc = 12 * pll_fbdiv / pll_prediv;
+			f_pll = f_vcc / postdiv;
+
+			memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
+			applog(LOG_DEBUG,
+		       "{ 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, },//PLL=%dMHz, VCO=%dMHz",
+		       temp_reg[0], temp_reg[1], temp_reg[2],
+		       temp_reg[3], temp_reg[4], temp_reg[5],
+		       temp_reg[6], temp_reg[7], temp_reg[8],
+		       temp_reg[9], temp_reg[10], temp_reg[11], f_pll, f_vcc);
+		for(j = test_chip_id; j < test_chip_id + test_chips; j++)
+		{
+			//cgsleep_us(20000);
+		    if (!cmd_WRITE_REG(t2, j, temp_reg))
+			{
+				applog(LOG_ERR, "set PLL %d MHz fail vco %d MHz", f_pll, f_vcc);
+				return false;
+			}
+			applog(LOG_WARNING, "set PLL %d MHz success vco %d MHz", f_pll, f_vcc);
+		}
+			cgsleep_us(200000);
+		}
 
 	t2->pll = f_pll;
 	int from = 0;
@@ -494,7 +517,7 @@ static bool is_chip_disabled(struct T2_chain *t2, uint8_t chip_id)
 
 int chain_t2_detect(struct T2_chain *t2, int idxpll)
 {
-	int i;
+	int i, j;
 	int cid = t2->chain_id;
 	int spi_clk_khz = 100000;
 //	set_spi_wrspeed(t2->spi_ctx, spi_clk_khz);
@@ -524,16 +547,19 @@ int chain_t2_detect(struct T2_chain *t2, int idxpll)
 	assert(t2->chips != NULL);
 
 	cgsleep_us(10000);
-	if(!cmd_BIST_COLLECT_BCAST(t2))
+
+for(j = test_chip_id; j < test_chip_id + test_chips; j++)
+{
+	if(!cmd_BIST_COLLECT_IDUAL(t2, j))
 		goto failure;
 	applog(LOG_WARNING, "collect core success");
 
 	cgsleep_us(1000);
-	if (!cmd_BIST_FIX_BCAST(t2))
+	if (!cmd_BIST_FIX_IDUAL(t2, j))
 		goto failure;
 		
 	applog(LOG_WARNING, "bist fix success");
-		
+}		
 	for (i = 0; i < t2->num_active_chips; i++)
 	{
 		check_chip(t2, i);
@@ -566,7 +592,7 @@ void check_disabled_chips(struct T2_chain *t2, int pllnum)
 	uint8_t reg[REG_LENGTH];
 	struct spi_ctx *ctx = t2->spi_ctx;
 
-	for (i = 0; i < t2->num_active_chips; i++) 
+	for (i = test_chip_id; i < test_chip_id + test_chips; i++) 
 	{
 		int chip_id = i + 1;
 		struct T2_chip *chip = &t2->chips[i];
@@ -634,7 +660,11 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 	uint8_t tmp_buf[JOB_LENGTH];
 	uint16_t crc;
 	uint8_t i;
-			
+
+	for(i = 0; i < 20; i++)
+	{
+		printf("0x%02x, 0x%02x, 0x%02x, 0x%02x,\n", work->data[i * 4 + 0], work->data[i * 4 + 1], work->data[i * 4 + 2], work->data[i * 4 + 3]);
+	}
 	static uint8_t job[JOB_LENGTH] = {
 		/* command */
 		0x00, 0x00,
@@ -1082,7 +1112,7 @@ static int64_t T2_scanwork(	struct thr_info *thr)
 	}
 	else
 	{
-		for (i = t2->num_active_chips; i > 0; i--) 
+		for (i = test_chip_id; i < test_chip_id + test_chips; i++) 
 		{
 			uint8_t c = i;
 			if (is_chip_disabled(t2, c))
