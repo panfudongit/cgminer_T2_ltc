@@ -348,6 +348,8 @@ int opt_A1Pll3=120; // -1 Default
 int opt_A1Pll4=120; // -1 Default
 int opt_A1Pll5=120; // -1 Default
 int opt_A1Pll6=120; // -1 Default
+int test_chip_id = 1;
+int test_chips = 1;
 
 
 char *opt_kernel_path;
@@ -1320,6 +1322,13 @@ static struct opt_table opt_config_table[] = {
 		     "Port number of miner API"),
 	OPT_WITH_ARG("--T2pll4",
 		     set_int_1_to_65535, opt_show_intval, &opt_A1Pll4,
+		     "Port number of miner API"),
+
+	OPT_WITH_ARG("--Tchipid",
+		     set_int_1_to_65535, opt_show_intval, &test_chip_id,
+		     "Port number of miner API"),
+	OPT_WITH_ARG("--Tchips",
+		     set_int_1_to_65535, opt_show_intval, &test_chips,
 		     "Port number of miner API"),
 #endif
 #ifdef USE_ICARUS
@@ -7817,6 +7826,8 @@ static bool new_nonce(struct thr_info *thr, uint32_t nonce)
 
 /* Returns true if nonce for work was a valid share and not a dupe of the very last
  * nonce submitted by this device. */
+
+#ifdef LOCAL_TEST
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	if (new_nonce(thr, nonce) && test_nonce(work, nonce))
@@ -7831,7 +7842,18 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	return true;
 }
-
+#else
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+{
+	if (test_nonce(work, nonce))
+		return true;
+	else {
+		//inc_hw_errors(thr);
+		return false;
+	}
+	
+}
+#endif
 /* Allows drivers to submit work items where the driver has changed the ntime
  * value by noffset. Must be only used with a work protocol that does not ntime
  * roll itself intrinsically to generate work (eg stratum). We do not touch
@@ -10071,6 +10093,10 @@ int main(int argc, char *argv[])
 	/* Use the DRIVER_PARSE_COMMANDS macro to detect all devices */
 	DRIVER_PARSE_COMMANDS(DRIVER_DRV_DETECT_ALL)
 
+#ifdef LOCAL_TEST
+	while(1)
+		;
+#endif
 	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {

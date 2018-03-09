@@ -44,6 +44,7 @@ struct work_queue {
 #define WORK_BUSY 0
 #define WORK_FREE 1
 
+#define LOCAL_TEST 1
 /*
  * if not cooled sufficiently, communication fails and chip is temporary
  * disabled. we let it inactive for 30 seconds to cool down

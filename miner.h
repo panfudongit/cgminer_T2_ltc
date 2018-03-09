@@ -1085,6 +1085,9 @@ extern int opt_A1Pll4;
 extern int opt_A1Pll5;
 extern int opt_A1Pll6;
 
+extern int test_chip_id;
+extern int test_chips;
+
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif

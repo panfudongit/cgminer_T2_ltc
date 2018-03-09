@@ -198,9 +198,29 @@ static uint8_t *cmd_BIST_FIX_BCAST(struct T2_chain *t2)
 	return ret;
 }
 
+static uint8_t *cmd_BIST_FIX_IDUAL(struct T2_chain *t2, uint8_t chip_id)
+{
+	uint8_t *ret = exec_cmd(t2, T2_BIST_FIX, chip_id, NULL, 0, 0);
+	if (ret == NULL || ret[0] != T2_BIST_FIX) {
+		applog(LOG_ERR, "%d: cmd_BIST_FIX_BCAST failed", t2->chain_id);
+		return NULL;
+	}
+	return ret;
+}
+
 static uint8_t *cmd_BIST_COLLECT_BCAST(struct T2_chain *t2)
 {
 	uint8_t *ret = exec_cmd(t2, T2_BIST_COLLECT, 0x00, NULL, 0, 0);
+	if (ret == NULL || ret[0] != T2_BIST_COLLECT) {
+		applog(LOG_ERR, "%d: cmd_BIST_COLLECT_BCAST failed", t2->chain_id);
+		return NULL;
+	}
+	return ret;
+}
+
+static uint8_t *cmd_BIST_COLLECT_IDUAL(struct T2_chain *t2, uint8_t chip_id)
+{
+	uint8_t *ret = exec_cmd(t2, T2_BIST_COLLECT, chip_id, NULL, 0, 0);
 	if (ret == NULL || ret[0] != T2_BIST_COLLECT) {
 		applog(LOG_ERR, "%d: cmd_BIST_COLLECT_BCAST failed", t2->chain_id);
 		return NULL;
@@ -333,8 +353,8 @@ static bool cmd_WRITE_JOB(struct T2_chain *t2, uint8_t chip_id,
 //	int ack_pos = tx_len + poll_len - ack_len;
 //	hexdump("poll: ACK", t2->spi_rx + ack_pos, tx_len);
 
-	//printf("[write job] \r\n");
-	//hexdump("job:", t2->spi_tx, JOB_LENGTH);
+	printf("[write job] \r\n");
+	hexdump("job:", t2->spi_tx, JOB_LENGTH);
 
 	cgsleep_us(1000);
 
@@ -348,7 +368,7 @@ static bool cmd_WRITE_JOB(struct T2_chain *t2, uint8_t chip_id,
 }
 
 /********** T2 low level functions */
-#define MAX_PLL_WAIT_CYCLES 25
+#define MAX_PLL_WAIT_CYCLES 1
 #define PLL_CYCLE_WAIT_TIME 40
 static bool check_chip_pll_lock(struct T2_chain *t2, int chip_id, uint8_t *wr)
 {
@@ -414,36 +434,40 @@ static bool set_pll_config(struct T2_chain *t2, int idxpll)
 {
 
 	uint8_t temp_reg[REG_LENGTH];
-	int i;
+	int i, j;
 	uint32_t pll_fbdiv, pll_prediv, pll_postdiv, postdiv;
 	uint32_t f_vcc, f_pll;
 
-	for(i = 0; i <= idxpll; i++)
-	{
-		pll_fbdiv = ((((uint32_t)default_reg[i][0]) << 8) & 0x00000100) | (((uint32_t)default_reg[i][1]) & 0x000000ff);
-		pll_prediv = (((uint32_t)default_reg[i][0]) >> 1) & 0x0000001f;
-		pll_postdiv = (((uint32_t)default_reg[i][3]) >> 6) & 0x00000003;
-		postdiv = (1 << pll_postdiv);
 
-		f_vcc = 12 * pll_fbdiv / pll_prediv;
-		f_pll = f_vcc / postdiv;
-
-		memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
-		applog(LOG_DEBUG,
-	       "{ 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, },//PLL=%dMHz, VCO=%dMHz",
-	       temp_reg[0], temp_reg[1], temp_reg[2],
-	       temp_reg[3], temp_reg[4], temp_reg[5],
-	       temp_reg[6], temp_reg[7], temp_reg[8],
-	       temp_reg[9], temp_reg[10], temp_reg[11], f_pll, f_vcc);
-	    if (!cmd_WRITE_REG(t2, ADDR_BROADCAST, temp_reg))
+		for(i = 0; i <= idxpll; i++)
 		{
-			applog(LOG_ERR, "set PLL %d MHz fail vco %d MHz", f_pll, f_vcc);
-			return false;
-		}
-		applog(LOG_WARNING, "set PLL %d MHz success vco %d MHz", f_pll, f_vcc);
+			pll_fbdiv = ((((uint32_t)default_reg[i][0]) << 8) & 0x00000100) | (((uint32_t)default_reg[i][1]) & 0x000000ff);
+			pll_prediv = (((uint32_t)default_reg[i][0]) >> 1) & 0x0000001f;
+			pll_postdiv = (((uint32_t)default_reg[i][3]) >> 6) & 0x00000003;
+			postdiv = (1 << pll_postdiv);
 
-		cgsleep_us(200000);
-	}
+			f_vcc = 12 * pll_fbdiv / pll_prediv;
+			f_pll = f_vcc / postdiv;
+
+			memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
+			applog(LOG_DEBUG,
+		       "{ 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, },//PLL=%dMHz, VCO=%dMHz",
+		       temp_reg[0], temp_reg[1], temp_reg[2],
+		       temp_reg[3], temp_reg[4], temp_reg[5],
+		       temp_reg[6], temp_reg[7], temp_reg[8],
+		       temp_reg[9], temp_reg[10], temp_reg[11], f_pll, f_vcc);
+		for(j = test_chip_id; j < test_chip_id + test_chips; j++)
+		{
+			//cgsleep_us(20000);
+		    if (!cmd_WRITE_REG(t2, j, temp_reg))
+			{
+				applog(LOG_ERR, "set PLL %d MHz fail vco %d MHz", f_pll, f_vcc);
+				return false;
+			}
+			applog(LOG_WARNING, "set PLL %d MHz success vco %d MHz", f_pll, f_vcc);
+		}
+			cgsleep_us(200000);
+		}
 
 	t2->pll = f_pll;
 	int from = 0;
@@ -494,7 +518,7 @@ static bool is_chip_disabled(struct T2_chain *t2, uint8_t chip_id)
 
 int chain_t2_detect(struct T2_chain *t2, int idxpll)
 {
-	int i;
+	int i, j;
 	int cid = t2->chain_id;
 	int spi_clk_khz = 100000;
 //	set_spi_wrspeed(t2->spi_ctx, spi_clk_khz);
@@ -524,16 +548,19 @@ int chain_t2_detect(struct T2_chain *t2, int idxpll)
 	assert(t2->chips != NULL);
 
 	cgsleep_us(10000);
-	if(!cmd_BIST_COLLECT_BCAST(t2))
+
+for(j = test_chip_id; j < test_chip_id + test_chips; j++)
+{
+	if(!cmd_BIST_COLLECT_IDUAL(t2, j))
 		goto failure;
 	applog(LOG_WARNING, "collect core success");
 
 	cgsleep_us(1000);
-	if (!cmd_BIST_FIX_BCAST(t2))
+	if (!cmd_BIST_FIX_IDUAL(t2, j))
 		goto failure;
 		
 	applog(LOG_WARNING, "bist fix success");
-		
+}		
 	for (i = 0; i < t2->num_active_chips; i++)
 	{
 		check_chip(t2, i);
@@ -634,7 +661,11 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 	uint8_t tmp_buf[JOB_LENGTH];
 	uint16_t crc;
 	uint8_t i;
-			
+
+	for(i = 0; i < 20; i++)
+	{
+		printf("0x%02x, 0x%02x, 0x%02x, 0x%02x,\n", work->data[i * 4 + 0], work->data[i * 4 + 1], work->data[i * 4 + 2], work->data[i * 4 + 3]);
+	}
 	static uint8_t job[JOB_LENGTH] = {
 		/* command */
 		0x00, 0x00,
@@ -749,7 +780,8 @@ static bool set_work(struct T2_chain *t2, uint8_t chip_id, struct work *work,
 	bool retval = false;
 
 	int job_id = chip->last_queued_id + 1;
-
+#ifdef LOCAL_TEST
+#else
 	//applog(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x",
 	       //cid, chip_id, job_id, queue_states);
 	if (job_id == (queue_states & 0x0f) || job_id == (queue_states >> 4))
@@ -761,6 +793,7 @@ static bool set_work(struct T2_chain *t2, uint8_t chip_id, struct work *work,
 		chip->work[chip->last_queued_id] = NULL;
 		retval = true;
 	}
+#endif	
 	uint8_t *jobdata = create_job(chip_id, job_id, work);
 	if (!cmd_WRITE_JOB(t2, chip_id, jobdata)) {
 		/* give back work */
@@ -974,6 +1007,8 @@ static void chain_hw_dis(void)
 {
 }
 
+void loop_main_test(void);
+
 /* Probe SPI channel and register chip chain */
 void T2_detect(bool hotplug)
 {
@@ -989,7 +1024,11 @@ void T2_detect(bool hotplug)
 	A1Pll4 = T2_ConfigT2PLLClock(opt_A1Pll4);
 	/* detect and register supported products */
 	if (detect_T2_chain())
+#ifdef LOCAL_TEST
+		loop_main_test();
+#else
 		return;
+#endif
 
     int i = 0;
 	/* release SPI context if no T2 products found */
@@ -1001,6 +1040,362 @@ void T2_detect(bool hotplug)
 }
 
 #define TEMP_UPDATE_INT_MS	2000
+
+#ifdef LOCAL_TEST
+
+struct work gwork[] = {
+		{
+		.data = {//data 1
+			0x20, 0x00, 0x00, 0x00,
+			0x62, 0xbd, 0x73, 0xfa,
+			0x50, 0xf0, 0xc8, 0x72,
+			0xe7, 0xcf, 0x94, 0xaf,
+			0x34, 0x12, 0x50, 0x5f,
+			0x0c, 0x47, 0xd7, 0x3e,
+			0x17, 0xa8, 0x26, 0x4c,
+			0x21, 0x09, 0xd7, 0xaa,
+			0x44, 0xc9, 0x6e, 0xd0,
+			0xe7, 0x37, 0xed, 0xe8,
+			0x96, 0xc5, 0x63, 0x5c,
+			0x8b, 0xbb, 0x2d, 0x62,
+			0x97, 0x5d, 0x2b, 0x38,
+			0xaa, 0xdb, 0x1a, 0xb8,
+			0x02, 0x83, 0x04, 0xca,
+			0x96, 0x0c, 0xca, 0xeb,
+			0x6c, 0x7f, 0x7c, 0x43,
+			0x5a, 0x68, 0x47, 0xf6,
+			0x1a, 0x04, 0x84, 0x42,
+			0x06, 0xfd, 0x8c, 0x2d,
+		},
+		.sdiff = 1024,
+	},
+	{
+		.data = {//data2
+			0x20, 0x00, 0x00, 0x00,
+			0xc9, 0x14, 0x8e, 0x92,
+			0xc0, 0xad, 0x4a, 0x56,
+			0x14, 0x75, 0xaf, 0x95,
+			0xab, 0xea, 0xa2, 0x8e,
+			0x21, 0xaa, 0x43, 0x63,
+			0x25, 0xda, 0xc4, 0x42,
+			0xc6, 0x43, 0x2d, 0x89,
+			0xd2, 0x1e, 0x2d, 0x6a,
+			0x99, 0x51, 0x2f, 0x1d,
+			0xae, 0x92, 0xf4, 0x9d,
+			0xa1, 0x9f, 0x99, 0x61,
+			0x69, 0x27, 0xc0, 0x84,
+			0xdf, 0x05, 0x07, 0xd9,
+			0x2a, 0x1c, 0x22, 0x6c,
+			0x0d, 0x3b, 0x0e, 0x52,
+			0x8e, 0x90, 0xa9, 0xe6,
+			0x5a, 0x9f, 0xab, 0xd3,
+			0x1a, 0x03, 0x4e, 0x4d,
+			0x00, 0x00, 0x00, 0x00,
+		},
+		.sdiff = 1024,
+	},
+	{
+		.data = {//data3
+			0x20, 0x00, 0x00, 0x00,
+			0xc9, 0x14, 0x8e, 0x92,
+			0xc0, 0xad, 0x4a, 0x56,
+			0x14, 0x75, 0xaf, 0x95,
+			0xab, 0xea, 0xa2, 0x8e,
+			0x21, 0xaa, 0x43, 0x63,
+			0x25, 0xda, 0xc4, 0x42,
+			0xc6, 0x43, 0x2d, 0x89,
+			0xd2, 0x1e, 0x2d, 0x6a,
+			0xb7, 0x3a, 0x70, 0xd0,
+			0x54, 0xc7, 0x0a, 0xb7,
+			0x0b, 0x88, 0x92, 0xb8,
+			0x91, 0x03, 0x9f, 0x38,
+			0x46, 0x1f, 0x7b, 0x20,
+			0x72, 0x62, 0xdd, 0x8f,
+			0xa7, 0x4e, 0xba, 0x7f,
+			0x99, 0x1b, 0xaa, 0x41,
+			0x5a, 0x9f, 0xac, 0x78,
+			0x1a, 0x03, 0x4e, 0x4d,
+			0x00, 0x00, 0x00, 0x00,
+		},
+		.sdiff = 1024,
+	},
+	{
+		.data = {//data4
+			0x20, 0x00, 0x00, 0x00,
+			0x08, 0x74, 0xa0, 0x3b,
+			0x66, 0x62, 0x47, 0x76,
+			0x19, 0x54, 0x54, 0xdf,
+			0xff, 0x66, 0x5a, 0xbc,
+			0x6d, 0xff, 0x4e, 0x78,
+			0xa6, 0x2a, 0x7b, 0x78,
+			0x4b, 0xcf, 0x2e, 0xa3,
+			0xca, 0x32, 0xfc, 0x34,
+			0xa1, 0x2e, 0x1a, 0x0f,
+			0xb8, 0xe9, 0x0a, 0x03,
+			0x26, 0x80, 0x40, 0x6c,
+			0xb0, 0xc9, 0x20, 0x70,
+			0x54, 0x10, 0x18, 0xa7,
+			0xa4, 0x7b, 0xc0, 0xfd,
+			0x77, 0x30, 0x95, 0xf2,
+			0x57, 0x89, 0xe2, 0x5a,
+			0x5a, 0x9f, 0xac, 0xaf,
+			0x1a, 0x03, 0x4e, 0x4d,
+			0x00, 0x00, 0x00, 0x00,
+		},
+		.sdiff = 1024,
+	},
+	{
+		.data = {//data5
+			0x20, 0x00, 0x00, 0x00,
+			0x08, 0x74, 0xa0, 0x3b,
+			0x66, 0x62, 0x47, 0x76,
+			0x19, 0x54, 0x54, 0xdf,
+			0xff, 0x66, 0x5a, 0xbc,
+			0x6d, 0xff, 0x4e, 0x78,
+			0xa6, 0x2a, 0x7b, 0x78,
+			0x4b, 0xcf, 0x2e, 0xa3,
+			0xca, 0x32, 0xfc, 0x34,
+			0x34, 0xd0, 0x9b, 0x79,
+			0x0c, 0xe2, 0x2f, 0x77,
+			0x71, 0x77, 0x80, 0x05,
+			0x76, 0x0d, 0x1b, 0xd1,
+			0x35, 0x90, 0x59, 0x9c,
+			0x3f, 0xac, 0xf6, 0x93,
+			0xeb, 0xfc, 0x73, 0x35,
+			0xc8, 0xd2, 0xc2, 0xd3,
+			0x5a, 0x9f, 0xad, 0x1d,
+			0x1a, 0x03, 0x4e, 0x4d,
+			0x00, 0x00, 0x00, 0x00,
+		},
+		.sdiff = 512,
+	},
+	{
+		.data = {//data6
+			0x20, 0x00, 0x00, 0x00,
+			0x08, 0x74, 0xa0, 0x3b,
+			0x66, 0x62, 0x47, 0x76,
+			0x19, 0x54, 0x54, 0xdf,
+			0xff, 0x66, 0x5a, 0xbc,
+			0x6d, 0xff, 0x4e, 0x78,
+			0xa6, 0x2a, 0x7b, 0x78,
+			0x4b, 0xcf, 0x2e, 0xa3,
+			0xca, 0x32, 0xfc, 0x34,
+			0xab, 0xc7, 0xc7, 0x0a,
+			0x66, 0xc7, 0xea, 0x61,
+			0x9c, 0x1b, 0x20, 0xc6,
+			0x90, 0x6f, 0x0a, 0x15,
+			0x78, 0xdc, 0x84, 0x1a,
+			0xf7, 0x76, 0x53, 0x68,
+			0xaf, 0x0e, 0x90, 0xf4,
+			0x36, 0x28, 0xff, 0xde,
+			0x5a, 0x9f, 0xad, 0xc2,
+			0x1a, 0x03, 0x4e, 0x4d,
+			0x00, 0x00, 0x00, 0x00,
+		},
+		.sdiff = 512,
+	},
+	{
+		.data = {//data7
+			0x20, 0x00, 0x00, 0x00,
+			0xf1, 0x45, 0x1d, 0xe3,
+			0xb6, 0xc3, 0x18, 0xde,
+			0x0a, 0x45, 0x2f, 0x99,
+			0x26, 0x15, 0x8b, 0xd0,
+			0xca, 0x6c, 0xf0, 0x5d,
+			0x86, 0xf8, 0xd6, 0x44,
+			0x56, 0xcb, 0x92, 0x03,
+			0x4f, 0x45, 0xb4, 0xb4,
+			0xa4, 0x02, 0xef, 0x62,
+			0xfd, 0xcc, 0x14, 0xc4,
+			0x79, 0x87, 0xc9, 0x9f,
+			0x09, 0xd0, 0x4b, 0xff,
+			0xa1, 0x48, 0x81, 0x5b,
+			0x01, 0xe9, 0x16, 0x8b,
+			0x4b, 0xd3, 0xe0, 0x8b,
+			0x6b, 0x78, 0xfe, 0xc1,
+			0x5a, 0x9f, 0xae, 0x7c,
+			0x1a, 0x03, 0x4e, 0x4d,
+			0x00, 0x00, 0x00, 0x00,
+
+		},
+		.sdiff = 128,
+	},
+};
+
+static int workid = 0;
+static int64_t T2_scanwork(	struct thr_info *thr)
+{
+	int i;
+	int32_t A1Pll = 1000;
+	struct T2_chain *t2 = chain[0];
+	int32_t nonce_ranges_processed = 0;
+
+	if (t2->num_cores == 0) {
+		return 0;
+	}
+
+	//board_selector->select(t2->chain_id);
+	//applog(LOG_DEBUG, "T2 running scanwork");
+
+	uint32_t nonce;
+	uint8_t chip_id;
+	uint8_t job_id;
+	bool work_updated = false;
+
+	mutex_lock(&t2->lock);
+
+	if (t2->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
+	{
+		//t2->temp = board_selector->get_temp(0);
+		t2->last_temp_time = get_current_ms();
+	}
+	int cid = t2->chain_id; 
+
+	/* poll queued results */
+	while (true)
+	{
+		if (!get_nonce(t2, (uint8_t*)&nonce, &chip_id, &job_id))
+			break;
+
+		//nonce = bswap_32(nonce);   //modify for A4
+
+		work_updated = true;
+		if (chip_id < 1 || chip_id > t2->num_active_chips) 
+		{
+			applog(LOG_WARNING, "%d: wrong chip_id %d", cid, chip_id);
+			continue;
+		}
+		if (job_id < 1 && job_id > 15) 
+		{
+			applog(LOG_WARNING, "%d: chip %d: result has wrong ""job_id %d", cid, chip_id, job_id);
+			flush_spi(t2);
+			continue;
+		}
+
+		struct T2_chip *chip = &t2->chips[chip_id - 1];
+		struct work *work = chip->work[job_id - 1];
+		if (work == NULL) 
+		{
+			/* already been flushed => stale */
+			applog(LOG_WARNING, "%d: chip %d: stale nonce 0x%08x", cid, chip_id, nonce);
+			chip->stales++;
+			continue;
+		}
+		if (!submit_nonce(NULL, work, nonce)) 
+		{
+			applog(LOG_WARNING, "%d: chip %d: invalid nonce 0x%08x", cid, chip_id, nonce);
+			chip->hw_errors++;
+			/* add a penalty of a full nonce range on HW errors */
+			nonce_ranges_processed--;
+			continue;
+		}
+		applog(LOG_INFO, "YEAH: %d: chip %d / job_id %d: nonce 0x%08x", cid, chip_id, job_id, nonce);
+		chip->nonces_found++;
+	}
+
+	uint8_t reg[REG_LENGTH];
+	/* check for completed works */
+	if(t2->work_start_delay > 0)
+	{
+		applog(LOG_INFO, "wait for pll stable");
+		t2->work_start_delay--;
+	}
+	else
+	{
+		for (i = test_chip_id; i < test_chip_id + test_chips; i++)
+		{
+			uint8_t c = i;
+			if (is_chip_disabled(t2, c))
+				continue;
+			if (!cmd_READ_REG(t2, c)) 
+			{
+				disable_chip(t2, c);
+				continue;
+			}
+            else
+            {
+            	//hexdump("send433: RX", t2->spi_rx, 18);
+                /* update temp database */
+                uint32_t temp = 0;
+                float    temp_f = 0.0f;
+
+                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+                //inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
+            }
+
+			uint8_t qstate = t2->spi_rx[11] & 0x01;
+			uint8_t qbuff = 0;
+			struct work *work;
+			struct T2_chip *chip = &t2->chips[i - 1];
+			switch(qstate) 
+			{
+			
+			case 1:
+				//applog(LOG_INFO, "chip %d busy now", i);
+				break;
+				/* fall through */
+			case 0:
+				work_updated = true;
+
+				work = gwork + workid;
+				workid = workid + 1;
+				if (work == NULL) 
+				{
+					applog(LOG_INFO, "%d: chip %d: work underflow", cid, c);
+					break;
+				}
+				if (set_work(t2, c, work, qbuff)) 
+				{
+					chip->nonce_ranges_done++;
+					nonce_ranges_processed++;
+					applog(LOG_INFO, "set work success %d, nonces processed %d", cid, nonce_ranges_processed);
+				}
+				
+				applog(LOG_DEBUG, "%d: chip %d: job done: %d/%d/%d/%d",
+				       cid, c,
+				       chip->nonce_ranges_done, chip->nonces_found,
+				       chip->hw_errors, chip->stales);
+				break;
+			}
+		} 
+        //inno_fan_speed_update(&s_fan_ctrl, cid);
+	}
+
+	switch(cid){
+		//case 0:check_disabled_chips(t2, A1Pll1);;break;
+		case 1:check_disabled_chips(t2, A1Pll2);;break;
+		case 2:check_disabled_chips(t2, A1Pll3);;break;
+		case 3:check_disabled_chips(t2, A1Pll4);;break;
+		default:;
+	}
+
+	mutex_unlock(&t2->lock);
+
+	//board_selector->release();
+
+	if (nonce_ranges_processed < 0)
+	{
+		//applog(LOG_INFO, "nonce_ranges_processed less than 0");
+		nonce_ranges_processed = 0;
+	}
+
+	if (nonce_ranges_processed != 0) 
+	{
+		;//applog(LOG_INFO, "%d, nonces processed %d", cid, nonce_ranges_processed);
+	}
+	/* in case of no progress, prevent busy looping */
+	//if (!work_updated)
+	//	cgsleep_ms(40);
+
+	cgtime(&t2->tvScryptCurr);
+	timersub(&t2->tvScryptCurr, &t2->tvScryptLast, &t2->tvScryptDiff);
+	cgtime(&t2->tvScryptLast);
+
+	return (int64_t)(2011173.18 * A1Pll / 1000 * (t2->num_cores/9.0) * (t2->tvScryptDiff.tv_usec / 1000000.0));
+
+}
+
+#else
 static int64_t T2_scanwork(	struct thr_info *thr)
 {
 	int i;
@@ -1082,7 +1477,7 @@ static int64_t T2_scanwork(	struct thr_info *thr)
 	}
 	else
 	{
-		for (i = t2->num_active_chips; i > 0; i--) 
+		for (i = test_chip_id; i > test_chip_id - 1; i--)
 		{
 			uint8_t c = i;
 			if (is_chip_disabled(t2, c))
@@ -1141,7 +1536,7 @@ static int64_t T2_scanwork(	struct thr_info *thr)
 	}
 
 	switch(cid){
-		case 0:check_disabled_chips(t2, A1Pll1);;break;
+		//case 0:check_disabled_chips(t2, A1Pll1);;break;
 		case 1:check_disabled_chips(t2, A1Pll2);;break;
 		case 2:check_disabled_chips(t2, A1Pll3);;break;
 		case 3:check_disabled_chips(t2, A1Pll4);;break;
@@ -1183,7 +1578,7 @@ static int64_t T2_scanwork(	struct thr_info *thr)
 	return (int64_t)(2011173.18 * A1Pll / 1000 * (t2->num_cores/9.0) * (t2->tvScryptDiff.tv_usec / 1000000.0));
 
 }
-
+#endif
 
 /* queue two work items per chip in chain */
 static bool T2_queue_full(struct cgpu_info *cgpu)
@@ -1218,6 +1613,11 @@ static void T2_flush_work(struct cgpu_info *cgpu)
 	{
 		applog(LOG_ERR, "%d: failed to abort work in chip chain!", cid);
 	}
+	if(!inno_cmd_resetjob(t2, test_chip_id))
+	{
+		applog(LOG_WARNING, "chip %d clear work false", i + 1);
+
+	}
 	/* flush the work chips were currently hashing */
 	for (i = 0; i < t2->num_active_chips; i++) 
 	{
@@ -1236,11 +1636,7 @@ static void T2_flush_work(struct cgpu_info *cgpu)
 
 		chip->last_queued_id = 0;
 
-		if(!inno_cmd_resetjob(t2, i + 1))
-		{
-			applog(LOG_WARNING, "chip %d clear work false", i + 1);
-			continue;
-		}
+
 
 		//applog(LOG_INFO, "chip :%d flushing queued work success", i);
 	}
@@ -1266,6 +1662,14 @@ static void T2_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu
 		    t2->chain_id, t2->num_active_chips, t2->num_cores,
 		    t2->temp == 0 ? "   " : temp);
 }
+
+#ifdef LOCAL_TEST
+void loop_main_test(void)
+{
+	while(1)
+		T2_scanwork(NULL);
+}
+#endif
 
 struct device_drv bitmineT2_drv = {
 	.drv_id = DRIVER_bitmineA1,
